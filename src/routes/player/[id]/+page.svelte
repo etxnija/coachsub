@@ -47,8 +47,14 @@
     if (!confirmDelete) { confirmDelete = true; return; }
     if (!player?.id) return;
     deleting = true;
-    await deletePlayer(player.id);
-    goto('/');
+    try {
+      await deletePlayer(player.id);
+      goto('/');
+    } catch (e) {
+      error = 'Failed to remove player';
+      deleting = false;
+      confirmDelete = false;
+    }
   }
 </script>
 
