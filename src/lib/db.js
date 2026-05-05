@@ -14,6 +14,15 @@ db.version(2).stores({
 	matchPlayers: '++id, matchId, playerId'
 });
 
+db.version(3).stores({
+	team: 'id, name',
+	players: '++id, name, number, position, teamId',
+	matches: '++id, name, date, teamId',
+	matchPlayers: '++id, matchId, playerId',
+	matchStats: '++id, matchId',
+	subEvents: '++id, matchId'
+});
+
 /** @typedef {'F' | 'M' | 'D' | 'G' | null} Position */
 
 /**
@@ -129,6 +138,44 @@ export async function saveMatchPlayers(matchId, players) {
 	if (players.length > 0) {
 		await db.matchPlayers.bulkAdd(players);
 	}
+}
+
+/**
+ * @typedef {Object} MatchStatSnapshot
+ * @property {number} [id]
+ * @property {number} matchId
+ * @property {number} period
+ * @property {Record<number, number>} totalMsPlayed
+ * @property {Record<number, Record<string, number>>} msPerPosition
+ */
+
+/**
+ * @typedef {Object} SubEvent
+ * @property {number} [id]
+ * @property {number} matchId
+ * @property {number} period
+ * @property {number} clockMs
+ * @property {number} playerInId
+ * @property {number} playerOutId
+ * @property {string} position
+ */
+
+/**
+ * @param {number} matchId
+ * @param {number} period
+ * @param {{ totalMsPlayed: Record<number, number>, msPerPosition: Record<number, Record<string, number>> }} data
+ * @returns {Promise<number>}
+ */
+export async function saveMatchStats(matchId, period, data) {
+	return db.matchStats.add({ matchId, period, ...data });
+}
+
+/**
+ * @param {Omit<SubEvent, 'id'>} event
+ * @returns {Promise<number>}
+ */
+export async function saveSubEvent(event) {
+	return db.subEvents.add(event);
 }
 
 export const POSITIONS = [

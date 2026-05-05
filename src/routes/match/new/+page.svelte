@@ -48,7 +48,7 @@
 				teamId: team.id
 			});
 			goto(`/match/${id}`);
-		} catch (e) {
+		} catch {
 			error = 'Failed to create match';
 			saving = false;
 		}

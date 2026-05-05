@@ -450,7 +450,7 @@
 				</div>
 
 				<!-- Bench strip -->
-				<div class="mt-3 px-4 pb-4">
+				<div class="mt-3 px-4">
 					<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
 						Bench ({bench.length})
 					</p>
@@ -476,6 +476,15 @@
 							<p class="w-full text-center text-sm text-gray-400">All players assigned</p>
 						{/if}
 					</div>
+				</div>
+				<!-- Start Match -->
+				<div class="px-4 pb-6 pt-4">
+					<button
+						on:click={() => match?.id !== undefined && goto(`/match/${match.id}/game`)}
+						class="btn-primary"
+					>
+						Start Match
+					</button>
 				</div>
 			</div>
 		{/if}

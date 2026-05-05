@@ -43,7 +43,7 @@
 		try {
 			await updatePlayer(player.id, { name: name.trim(), number: num, position: position || null });
 			goto('/');
-		} catch (e) {
+		} catch {
 			error = 'Failed to save changes';
 			saving = false;
 		}
@@ -59,7 +59,7 @@
 		try {
 			await deletePlayer(player.id);
 			goto('/');
-		} catch (e) {
+		} catch {
 			error = 'Failed to remove player';
 			deleting = false;
 			confirmDelete = false;

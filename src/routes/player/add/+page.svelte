@@ -30,7 +30,7 @@
 				teamId: team.id
 			});
 			goto('/');
-		} catch (e) {
+		} catch {
 			error = 'Failed to save player';
 			saving = false;
 		}
