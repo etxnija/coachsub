@@ -33,6 +33,7 @@
 	let formationRows = [];
 	/** @type {Set<string>} */
 	let groupASlots = new Set();
+	let useGroups = true;
 
 	/** @type {Record<string, {id: number, name: string, number: number}[]>} */
 	let preDropOccupants = {};
@@ -67,6 +68,8 @@
 		slots = formationRows.flatMap((row) =>
 			row.positions.map((pos) => ({ id: slotId(row.type, pos), position: pos, type: row.type, items: [] }))
 		);
+
+		useGroups = match.useGroups ?? true;
 
 		if (match.groupASlots && match.groupASlots.length > 0) {
 			groupASlots = new Set(match.groupASlots);
@@ -150,6 +153,11 @@
 	function toggleBenchGroup(playerId) {
 		const chip = bench.find((b) => b.id === playerId);
 		if (chip && chip.group !== null) { chip.group = chip.group === 'A' ? 'B' : 'A'; bench = bench; persistRoster(); }
+	}
+
+	async function toggleUseGroups() {
+		useGroups = !useGroups;
+		if (match?.id !== undefined) await updateMatch(match.id, { useGroups });
 	}
 
 	async function persistRoster() {
@@ -345,13 +353,22 @@
 		{:else}
 			<div class="flex min-h-0 flex-1 flex-col">
 
-				<!-- Compact single-line group legend -->
+				<!-- Compact single-line group legend + toggle -->
 				<div class="flex flex-shrink-0 items-center gap-1.5 border-b border-gray-100 px-4 py-1.5 text-xs">
-					<span class="font-bold text-orange-500">●&nbsp;A</span>
-					<span class="text-orange-400">{groupAPositions.join(' · ') || '—'}</span>
-					<span class="mx-1 text-gray-300">|</span>
-					<span class="font-bold text-teal-600">●&nbsp;B</span>
-					<span class="text-teal-500">{groupBPositions.join(' · ') || '—'}</span>
+					{#if useGroups}
+						<span class="font-bold text-orange-500">●&nbsp;A</span>
+						<span class="text-orange-400">{groupAPositions.join(' · ') || '—'}</span>
+						<span class="mx-1 text-gray-300">|</span>
+						<span class="font-bold text-teal-600">●&nbsp;B</span>
+						<span class="text-teal-500">{groupBPositions.join(' · ') || '—'}</span>
+					{:else}
+						<span class="text-gray-400">No rotation groups</span>
+					{/if}
+					<span class="flex-1"></span>
+					<button
+						on:click={toggleUseGroups}
+						class="rounded-full px-2 py-0.5 text-[10px] font-bold {useGroups ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}"
+					>{useGroups ? 'Groups ON' : 'Groups OFF'}</button>
 				</div>
 
 				<!-- Half-pitch: flex-1 fills remaining height -->
@@ -389,9 +406,9 @@
 							{@const isGroupA = chip.group === 'A'}
 							<div
 								animate:flip={{ duration: FLIP_MS }}
-								class="relative flex h-14 w-[3.25rem] flex-shrink-0 flex-col items-center justify-center rounded-xl shadow-sm {isGK ? 'bg-gray-500' : isGroupA ? 'bg-orange-500' : 'bg-teal-600'}"
+								class="relative flex h-14 w-[3.25rem] flex-shrink-0 flex-col items-center justify-center rounded-xl shadow-sm {isGK ? 'bg-gray-500' : !useGroups ? 'bg-blue-700' : isGroupA ? 'bg-orange-500' : 'bg-teal-600'}"
 							>
-								{#if !isGK}
+								{#if !isGK && useGroups}
 									<button
 										on:click|stopPropagation={() => toggleBenchGroup(chip.id)}
 										class="absolute right-0.5 top-0.5 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-white/50 text-[8px] font-bold text-white shadow {isGroupA ? 'bg-orange-300' : 'bg-teal-400'}"

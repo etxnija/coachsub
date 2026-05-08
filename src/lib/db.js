@@ -53,6 +53,7 @@ db.version(3).stores({
  * @property {number} teamId
  * @property {string[]} [groupASlots]  - slot IDs (from slotId()) that belong to rotation Group A
  * @property {'setup' | 'live' | 'complete'} [status]
+ * @property {boolean} [useGroups]  - whether rotation groups A/B are enabled (default true)
  */
 
 /**

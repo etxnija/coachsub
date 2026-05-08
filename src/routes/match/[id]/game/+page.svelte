@@ -17,7 +17,7 @@
 	 * @property {number} stintMs
 	 * @property {Record<string, number>} msPerPosition
 	 * @property {string | null} position
-	 * @property {'A' | 'B'} group
+	 * @property {'A' | 'B' | null} group
 	 */
 
 	/** @type {import('$lib/db.js').Match | null} */
@@ -44,11 +44,14 @@
 	/** @type {GameChip[]} */
 	let benchB = [];
 	/** @type {GameChip[]} */
+	let benchAll = []; // used when !useGroups
+	/** @type {GameChip[]} */
 	let benchGK = [];
 	/** @type {{ type: string, positions: string[] }[]} */
 	let formationRows = [];
 	/** @type {Set<string>} */
 	let groupASet = new Set();
+	let useGroups = true;
 
 	// Orientation: 'bottom' | 'left' | 'right'
 	let orientation = 'bottom';
@@ -56,7 +59,7 @@
 	// DnD state
 	/** @type {Record<string, GameChip[]>} */
 	let preDropOccupants = {};
-	/** @type {'A' | 'B' | 'GK' | null} */
+	/** @type {'A' | 'B' | 'GK' | 'ALL' | null} */
 	let benchDragGroup = null;
 	/** @type {GameChip | null} */
 	let pendingDisplaced = null;
@@ -66,6 +69,11 @@
 	const orientLabels = { bottom: 'bot', left: 'left', right: 'right' };
 	$: orientTransform =
 		{ bottom: '', left: 'rotate(-90deg)', right: 'rotate(90deg)' }[orientation] ?? '';
+
+	// Max bench stint per group (for the time bar indicator)
+	$: maxStintA = benchA.length > 0 ? Math.max(...benchA.map((c) => c.stintMs)) : 0;
+	$: maxStintB = benchB.length > 0 ? Math.max(...benchB.map((c) => c.stintMs)) : 0;
+	$: maxStintAll = benchAll.length > 0 ? Math.max(...benchAll.map((c) => c.stintMs)) : 0;
 
 	function cycleOrientation() {
 		const order = ['bottom', 'left', 'right'];
@@ -119,6 +127,7 @@
 		if (!match) return;
 		formationRows = parseFormation(match.formation);
 		groupASet = new Set(match.groupASlots ?? []);
+		useGroups = match.useGroups ?? true;
 
 		const included = new Set(matchPlayers.map((mp) => mp.playerId));
 
@@ -158,7 +167,7 @@
 			.map((p) => {
 				const mp = matchPlayers.find((m) => m.playerId === p.id);
 				/** @type {'A' | 'B' | null} */
-				const group = mp ? mp.rotationGroup : 'A';
+				const group = mp ? mp.rotationGroup ?? 'A' : 'A';
 				return {
 					id: /** @type {number} */ (p.id),
 					name: p.name,
@@ -167,13 +176,20 @@
 					stintMs: 0,
 					msPerPosition: {},
 					position: null,
-					group
+					group: mp ? mp.rotationGroup : group
 				};
 			});
 
-		benchA = allBench.filter((c) => c.group === 'A');
-		benchB = allBench.filter((c) => c.group === 'B');
 		benchGK = allBench.filter((c) => c.group === null);
+		if (useGroups) {
+			benchA = allBench.filter((c) => c.group === 'A');
+			benchB = allBench.filter((c) => c.group === 'B');
+			benchAll = [];
+		} else {
+			benchAll = allBench.filter((c) => c.group !== null);
+			benchA = [];
+			benchB = [];
+		}
 	}
 
 	function startClock() {
@@ -213,12 +229,17 @@
 				}
 			}
 		}
-		for (const chip of benchA) chip.stintMs += elapsed;
-		for (const chip of benchB) chip.stintMs += elapsed;
+		if (useGroups) {
+			for (const chip of benchA) chip.stintMs += elapsed;
+			for (const chip of benchB) chip.stintMs += elapsed;
+			benchA = benchA;
+			benchB = benchB;
+		} else {
+			for (const chip of benchAll) chip.stintMs += elapsed;
+			benchAll = benchAll;
+		}
 		for (const chip of benchGK) chip.stintMs += elapsed;
 		slots = slots;
-		benchA = benchA;
-		benchB = benchB;
 		benchGK = benchGK;
 	}
 
@@ -257,7 +278,8 @@
 				msPerPosition[chip.id] = { ...chip.msPerPosition };
 			}
 		}
-		for (const chip of [...benchA, ...benchB, ...benchGK]) {
+		const allBenchChips = useGroups ? [...benchA, ...benchB, ...benchGK] : [...benchAll, ...benchGK];
+		for (const chip of allBenchChips) {
 			totalMsPlayed[chip.id] = chip.totalMs;
 			msPerPosition[chip.id] = { ...chip.msPerPosition };
 		}
@@ -298,15 +320,22 @@
 				pendingDisplaced = d;
 			} else {
 				// Slot→slot: add displaced directly to correct bench array
-				const onBench =
-					benchA.some((c) => c.id === d.id) || benchB.some((c) => c.id === d.id);
+				const onBench = useGroups
+					? benchA.some((c) => c.id === d.id) || benchB.some((c) => c.id === d.id)
+					: benchAll.some((c) => c.id === d.id);
+				const onBenchGK = benchGK.some((c) => c.id === d.id);
 				const inSlot = slots.some(
 					(s) => s.id !== sid && s.items.some((c) => c.id === d.id)
 				);
-				if (!onBench && !inSlot) {
-					if (d.group === 'A') benchA = [...benchA, d];
-					else if (d.group === 'B') benchB = [...benchB, d];
-					else benchGK = [...benchGK, d];
+				if (!onBench && !onBenchGK && !inSlot) {
+					if (d.group === null) {
+						benchGK = [...benchGK, d];
+					} else if (useGroups) {
+						if (d.group === 'A') benchA = [...benchA, d];
+						else benchB = [...benchB, d];
+					} else {
+						benchAll = [...benchAll, d];
+					}
 				}
 			}
 			if (incoming && match?.id) {
@@ -326,24 +355,30 @@
 			: [];
 		slots = slots;
 		if (incoming) {
-			benchA = benchA.filter((c) => c.id !== incoming.id);
-			benchB = benchB.filter((c) => c.id !== incoming.id);
+			if (useGroups) {
+				benchA = benchA.filter((c) => c.id !== incoming.id);
+				benchB = benchB.filter((c) => c.id !== incoming.id);
+			} else {
+				benchAll = benchAll.filter((c) => c.id !== incoming.id);
+			}
+			benchGK = benchGK.filter((c) => c.id !== incoming.id);
 		}
 	}
 
 	/**
-	 * @param {'A' | 'B' | 'GK'} group
+	 * @param {'A' | 'B' | 'GK' | 'ALL'} group
 	 * @param {CustomEvent} e
 	 */
 	function handleBenchConsider(group, e) {
 		benchDragGroup = group;
 		if (group === 'A') benchA = e.detail.items;
 		else if (group === 'B') benchB = e.detail.items;
-		else benchGK = e.detail.items;
+		else if (group === 'GK') benchGK = e.detail.items;
+		else benchAll = e.detail.items;
 	}
 
 	/**
-	 * @param {'A' | 'B' | 'GK'} group
+	 * @param {'A' | 'B' | 'GK' | 'ALL'} group
 	 * @param {CustomEvent} e
 	 */
 	function handleBenchFinalize(group, e) {
@@ -355,23 +390,32 @@
 
 		if (group === 'A') benchA = finalItems;
 		else if (group === 'B') benchB = finalItems;
-		else benchGK = finalItems;
+		else if (group === 'GK') benchGK = finalItems;
+		else benchAll = finalItems;
 
 		// Add any displaced player stashed by slot finalize
 		if (pendingDisplaced) {
 			const d = pendingDisplaced;
 			pendingDisplaced = null;
-			if (d.group === 'A') benchA = [...benchA, d];
-			else if (d.group === 'B') benchB = [...benchB, d];
-			else benchGK = [...benchGK, d];
+			if (d.group === null) {
+				benchGK = [...benchGK, d];
+			} else if (useGroups) {
+				if (d.group === 'A') benchA = [...benchA, d];
+				else benchB = [...benchB, d];
+			} else {
+				benchAll = [...benchAll, d];
+			}
 		}
 
-		// Sort A and B by bench time descending (longest bench = NEXT)
+		// Sort by bench time descending (longest bench = NEXT)
 		benchA = [...benchA].sort((a, b) => b.stintMs - a.stintMs);
 		benchB = [...benchB].sort((a, b) => b.stintMs - a.stintMs);
+		benchAll = [...benchAll].sort((a, b) => b.stintMs - a.stintMs);
 
 		// Remove from slots any player now on bench
-		const allBenchIds = new Set([...benchA, ...benchB, ...benchGK].map((c) => c.id));
+		const allBenchIds = new Set(
+			[...(useGroups ? [...benchA, ...benchB] : benchAll), ...benchGK].map((c) => c.id)
+		);
 		for (const slot of slots) {
 			slot.items = slot.items.filter((c) => !allBenchIds.has(c.id));
 		}
@@ -528,81 +572,127 @@
 
 		<!-- Bench -->
 		<div class="border-t border-gray-200 bg-white px-4 pb-3 pt-2">
-			<!-- Group A -->
-			<div class="mb-2">
-				<p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-orange-500">
-					● Group A {#if benchA.length > 0}— next: #{benchA[0].number}{/if}
-				</p>
-				<div
-					use:dndzone={{ items: benchA, flipDurationMs: FLIP_MS, dropTargetStyle: {} }}
-					on:consider={(e) => handleBenchConsider('A', e)}
-					on:finalize={(e) => handleBenchFinalize('A', e)}
-					class="flex min-h-[3.5rem] flex-wrap gap-1.5"
-				>
-					{#each benchA as chip, i (chip.id)}
-						<div
-							animate:flip={{ duration: FLIP_MS }}
-							class="relative flex h-16 w-[3.25rem] flex-shrink-0 flex-col items-center justify-center rounded-xl bg-blue-700 px-1 shadow-sm ring-2 ring-orange-400/60"
-						>
-							{#if i === 0}
-								<span
-									class="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-orange-400 px-1.5 text-[7px] font-bold leading-4 text-white"
-									>NEXT</span
+			{#if useGroups}
+				<!-- Group A -->
+				<div class="mb-2">
+					<p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-orange-500">
+						● Group A {#if benchA.length > 0}— next: #{benchA[0].number}{/if}
+					</p>
+					<div
+						use:dndzone={{ items: benchA, flipDurationMs: FLIP_MS, dropTargetStyle: {} }}
+						on:consider={(e) => handleBenchConsider('A', e)}
+						on:finalize={(e) => handleBenchFinalize('A', e)}
+						class="flex min-h-[3.5rem] flex-wrap gap-1.5"
+					>
+						{#each benchA as chip, i (chip.id)}
+							{@const barPct = maxStintA > 0 ? Math.round((chip.stintMs / maxStintA) * 100) : 0}
+							<div
+								animate:flip={{ duration: FLIP_MS }}
+								class="relative flex h-16 w-[3.25rem] flex-shrink-0 flex-col items-center justify-center rounded-xl bg-blue-700 px-1 pb-2 shadow-sm ring-2 ring-orange-400/60"
+							>
+								{#if i === 0}
+									<span
+										class="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-orange-400 px-1.5 text-[7px] font-bold leading-4 text-white"
+										>NEXT</span
+									>
+								{/if}
+								<span class="text-base font-bold leading-none text-white">{chip.number}</span>
+								<span class="max-w-full truncate text-[9px] font-medium leading-tight text-blue-100"
+									>{chip.name.split(' ')[0]}</span
 								>
-							{/if}
-							<span class="text-base font-bold leading-none text-white">{chip.number}</span>
-							<span class="max-w-full truncate text-[9px] font-medium leading-tight text-blue-100"
-								>{chip.name.split(' ')[0]}</span
-							>
-							<span class="text-[7px] leading-tight text-blue-200">{fmt(chip.totalMs)}</span>
-							<span class="text-[7px] font-semibold leading-tight text-yellow-300"
-								>{fmt(chip.stintMs)}</span
-							>
-						</div>
-					{/each}
-					{#if benchA.length === 0}
-						<p class="py-2 text-sm text-gray-400">No Group A subs</p>
-					{/if}
+								<span class="text-[7px] leading-tight text-blue-200">{fmt(chip.totalMs)}</span>
+								<!-- bench wait bar -->
+								<div class="absolute bottom-1.5 left-1.5 right-1.5 h-0.5 overflow-hidden rounded-full bg-white/20">
+									<div class="h-full rounded-full bg-yellow-300" style="width: {barPct}%"></div>
+								</div>
+							</div>
+						{/each}
+						{#if benchA.length === 0}
+							<p class="py-2 text-sm text-gray-400">No Group A subs</p>
+						{/if}
+					</div>
 				</div>
-			</div>
 
-			<!-- Group B -->
-			<div>
-				<p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-teal-600">
-					● Group B {#if benchB.length > 0}— next: #{benchB[0].number}{/if}
-				</p>
-				<div
-					use:dndzone={{ items: benchB, flipDurationMs: FLIP_MS, dropTargetStyle: {} }}
-					on:consider={(e) => handleBenchConsider('B', e)}
-					on:finalize={(e) => handleBenchFinalize('B', e)}
-					class="flex min-h-[3.5rem] flex-wrap gap-1.5"
-				>
-					{#each benchB as chip, i (chip.id)}
-						<div
-							animate:flip={{ duration: FLIP_MS }}
-							class="relative flex h-16 w-[3.25rem] flex-shrink-0 flex-col items-center justify-center rounded-xl bg-blue-700 px-1 shadow-sm ring-2 ring-teal-500/60"
-						>
-							{#if i === 0}
-								<span
-									class="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-teal-500 px-1.5 text-[7px] font-bold leading-4 text-white"
-									>NEXT</span
+				<!-- Group B -->
+				<div>
+					<p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-teal-600">
+						● Group B {#if benchB.length > 0}— next: #{benchB[0].number}{/if}
+					</p>
+					<div
+						use:dndzone={{ items: benchB, flipDurationMs: FLIP_MS, dropTargetStyle: {} }}
+						on:consider={(e) => handleBenchConsider('B', e)}
+						on:finalize={(e) => handleBenchFinalize('B', e)}
+						class="flex min-h-[3.5rem] flex-wrap gap-1.5"
+					>
+						{#each benchB as chip, i (chip.id)}
+							{@const barPct = maxStintB > 0 ? Math.round((chip.stintMs / maxStintB) * 100) : 0}
+							<div
+								animate:flip={{ duration: FLIP_MS }}
+								class="relative flex h-16 w-[3.25rem] flex-shrink-0 flex-col items-center justify-center rounded-xl bg-blue-700 px-1 pb-2 shadow-sm ring-2 ring-teal-500/60"
+							>
+								{#if i === 0}
+									<span
+										class="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-teal-500 px-1.5 text-[7px] font-bold leading-4 text-white"
+										>NEXT</span
+									>
+								{/if}
+								<span class="text-base font-bold leading-none text-white">{chip.number}</span>
+								<span class="max-w-full truncate text-[9px] font-medium leading-tight text-blue-100"
+									>{chip.name.split(' ')[0]}</span
 								>
-							{/if}
-							<span class="text-base font-bold leading-none text-white">{chip.number}</span>
-							<span class="max-w-full truncate text-[9px] font-medium leading-tight text-blue-100"
-								>{chip.name.split(' ')[0]}</span
-							>
-							<span class="text-[7px] leading-tight text-blue-200">{fmt(chip.totalMs)}</span>
-							<span class="text-[7px] font-semibold leading-tight text-yellow-300"
-								>{fmt(chip.stintMs)}</span
-							>
-						</div>
-					{/each}
-					{#if benchB.length === 0}
-						<p class="py-2 text-sm text-gray-400">No Group B subs</p>
-					{/if}
+								<span class="text-[7px] leading-tight text-blue-200">{fmt(chip.totalMs)}</span>
+								<!-- bench wait bar -->
+								<div class="absolute bottom-1.5 left-1.5 right-1.5 h-0.5 overflow-hidden rounded-full bg-white/20">
+									<div class="h-full rounded-full bg-yellow-300" style="width: {barPct}%"></div>
+								</div>
+							</div>
+						{/each}
+						{#if benchB.length === 0}
+							<p class="py-2 text-sm text-gray-400">No Group B subs</p>
+						{/if}
+					</div>
 				</div>
-			</div>
+			{:else}
+				<!-- Ungrouped bench -->
+				<div>
+					<p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-blue-600">
+						● Bench {#if benchAll.length > 0}— next: #{benchAll[0].number}{/if}
+					</p>
+					<div
+						use:dndzone={{ items: benchAll, flipDurationMs: FLIP_MS, dropTargetStyle: {} }}
+						on:consider={(e) => handleBenchConsider('ALL', e)}
+						on:finalize={(e) => handleBenchFinalize('ALL', e)}
+						class="flex min-h-[3.5rem] flex-wrap gap-1.5"
+					>
+						{#each benchAll as chip, i (chip.id)}
+							{@const barPct = maxStintAll > 0 ? Math.round((chip.stintMs / maxStintAll) * 100) : 0}
+							<div
+								animate:flip={{ duration: FLIP_MS }}
+								class="relative flex h-16 w-[3.25rem] flex-shrink-0 flex-col items-center justify-center rounded-xl bg-blue-700 px-1 pb-2 shadow-sm"
+							>
+								{#if i === 0}
+									<span
+										class="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-blue-500 px-1.5 text-[7px] font-bold leading-4 text-white"
+										>NEXT</span
+									>
+								{/if}
+								<span class="text-base font-bold leading-none text-white">{chip.number}</span>
+								<span class="max-w-full truncate text-[9px] font-medium leading-tight text-blue-100"
+									>{chip.name.split(' ')[0]}</span
+								>
+								<span class="text-[7px] leading-tight text-blue-200">{fmt(chip.totalMs)}</span>
+								<!-- bench wait bar -->
+								<div class="absolute bottom-1.5 left-1.5 right-1.5 h-0.5 overflow-hidden rounded-full bg-white/20">
+									<div class="h-full rounded-full bg-yellow-300" style="width: {barPct}%"></div>
+								</div>
+							</div>
+						{/each}
+						{#if benchAll.length === 0}
+							<p class="py-2 text-sm text-gray-400">No subs</p>
+						{/if}
+					</div>
+				</div>
+			{/if}
 
 			<!-- GK (no rotation group) -->
 			{#if benchGK.length > 0}
