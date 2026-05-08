@@ -73,7 +73,8 @@
 					{#each row.positions as pos}
 						{@const pitchSlot = slots.find((s) => s.id === slotId(row.type, pos))}
 						{#if pitchSlot}
-							{@const isGroupA = groupASet.has(pitchSlot.id)}
+							{@const isGK = pitchSlot.type === 'GK'}
+							{@const isGroupA = !isGK && groupASet.has(pitchSlot.id)}
 							<div class="relative h-14 w-[3.25rem]">
 								<!-- DnD zone fills the slot wrapper -->
 								<div
@@ -86,12 +87,16 @@
 									on:finalize={(e) => onFinalize(pitchSlot.id, e)}
 									class="absolute inset-0 flex flex-col items-center justify-center rounded-xl border-2 transition-colors {pitchSlot
 										.items.length > 0
-										? isGroupA
-											? 'border-orange-400/60'
-											: 'border-teal-500/60'
-										: isGroupA
-											? 'border-dashed border-orange-400/70 bg-white/10'
-											: 'border-dashed border-teal-400/70 bg-white/10'}"
+										? isGK
+											? 'border-gray-400/60'
+											: isGroupA
+												? 'border-orange-400/60'
+												: 'border-teal-500/60'
+										: isGK
+											? 'border-dashed border-gray-400/50 bg-white/5'
+											: isGroupA
+												? 'border-dashed border-orange-400/70 bg-white/10'
+												: 'border-dashed border-teal-400/70 bg-white/10'}"
 								>
 									{#each pitchSlot.items as chip (chip.id)}
 										<div
@@ -99,20 +104,16 @@
 											class="absolute inset-0 flex flex-col items-center justify-center rounded-xl bg-white px-1 shadow-md"
 										>
 											<!-- Parent provides chip content via named slot -->
-											<slot name="chip" {chip} {isGroupA} {pitchSlot} />
+											<slot name="chip" {chip} {isGroupA} {isGK} {pitchSlot} />
 										</div>
 									{/each}
 									{#if pitchSlot.items.length === 0}
-										<span
-											class="text-[10px] font-semibold {isGroupA
-												? 'text-orange-200'
-												: 'text-teal-200'}">{pos}</span
-										>
+										<span class="text-[10px] font-semibold {isGK ? 'text-gray-300' : isGroupA ? 'text-orange-200' : 'text-teal-200'}">{pos}</span>
 									{/if}
 								</div>
 
-								<!-- Group A/B toggle badge: only shown when onGroupToggle is provided (formation setup) -->
-								{#if onGroupToggle}
+								<!-- A/B toggle: only shown for non-GK slots when onGroupToggle is provided -->
+								{#if onGroupToggle && !isGK}
 									<button
 										on:click|stopPropagation={() => onGroupToggle && onGroupToggle(pitchSlot.id)}
 										class="absolute right-0.5 top-0.5 z-20 flex h-5 w-5 items-center justify-center rounded-full border border-white/50 text-[8px] font-bold text-white shadow {isGroupA

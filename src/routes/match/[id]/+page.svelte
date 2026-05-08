@@ -43,7 +43,7 @@
 	const FLIP_MS = 200;
 
 	$: groupAPositions = slots.filter((s) => groupASlots.has(s.id)).map((s) => s.position);
-	$: groupBPositions = slots.filter((s) => !groupASlots.has(s.id)).map((s) => s.position);
+	$: groupBPositions = slots.filter((s) => !groupASlots.has(s.id) && s.type !== 'GK').map((s) => s.position);
 	$: startingCount = slots.filter((s) => s.items.length > 0).length;
 
 	onMount(async () => {
@@ -71,11 +71,18 @@
 		if (match.groupASlots && match.groupASlots.length > 0) {
 			groupASlots = new Set(match.groupASlots);
 		} else {
-			const halfIdx = Math.ceil(formationRows.length / 2);
+			// Default: FWD → A, wide MID (LM/RM) → A, CM/DEF → B, GK → neither
 			groupASlots = new Set(
-				formationRows.slice(0, halfIdx).flatMap((row) =>
-					row.positions.map((pos) => slotId(row.type, pos))
-				)
+				formationRows.flatMap((row) => {
+					if (row.type === 'GK' || row.type === 'DEF') return [];
+					if (row.type === 'FWD') return row.positions.map((pos) => slotId(row.type, pos));
+					if (row.type === 'MID') {
+						return row.positions
+							.filter((pos) => pos === 'LM' || pos === 'RM')
+							.map((pos) => slotId(row.type, pos));
+					}
+					return [];
+				})
 			);
 		}
 
@@ -103,9 +110,10 @@
 			});
 	}
 
-	/** @param {import('$lib/db.js').Player} player @returns {'A' | 'B'} */
+	/** @param {import('$lib/db.js').Player} player @returns {'A' | 'B' | null} */
 	function defaultGroupForPlayer(player) {
-		return player.position === 'D' || player.position === 'G' ? 'B' : 'A';
+		if (player.position === 'G') return null;
+		return player.position === 'D' ? 'B' : 'A';
 	}
 
 	/** @param {number} playerId */
@@ -141,8 +149,7 @@
 	/** @param {number} playerId */
 	function toggleBenchGroup(playerId) {
 		const chip = bench.find((b) => b.id === playerId);
-		if (chip) { chip.group = chip.group === 'A' ? 'B' : 'A'; bench = bench; }
-		persistRoster();
+		if (chip && chip.group !== null) { chip.group = chip.group === 'A' ? 'B' : 'A'; bench = bench; persistRoster(); }
 	}
 
 	async function persistRoster() {
@@ -160,9 +167,10 @@
 				let rotationGroup = null;
 				if (isStarting) {
 					const slot = slots.find((s) => s.items.some((i) => i.id === pid));
-					rotationGroup = slot && groupASlots.has(slot.id) ? 'A' : 'B';
+					rotationGroup = slot?.type === 'GK' ? null : slot && groupASlots.has(slot.id) ? 'A' : 'B';
 				} else {
-					rotationGroup = bench.find((b) => b.id === pid)?.group ?? 'A';
+					const benchChip = bench.find((b) => b.id === pid);
+					rotationGroup = benchChip !== undefined ? benchChip.group : null;
 				}
 				return {
 					matchId: /** @type {number} */ (match?.id),
@@ -196,7 +204,8 @@
 		const displaced = originalOccupant && incomingPlayer && originalOccupant.id !== incomingPlayer.id
 			? originalOccupant : null;
 		if (displaced) {
-			const displacedGroup = groupASlots.has(sid) ? 'A' : 'B';
+			const targetSlot = slots.find((s) => s.id === sid);
+			const displacedGroup = targetSlot?.type === 'GK' ? null : groupASlots.has(sid) ? 'A' : 'B';
 			if (benchDragActive) {
 				pendingDisplaced = { ...displaced, group: displacedGroup };
 			} else {
@@ -356,10 +365,10 @@
 						onFinalize={handleSlotFinalize}
 						onGroupToggle={toggleSlotGroup}
 					>
-						<svelte:fragment slot="chip" let:chip let:isGroupA let:pitchSlot>
+						<svelte:fragment slot="chip" let:chip let:isGroupA let:isGK let:pitchSlot>
 							<span class="text-sm font-bold leading-none text-blue-700">{chip.number}</span>
 							<span class="max-w-full truncate text-[9px] font-medium leading-tight text-gray-700">{chip.name.split(' ')[0]}</span>
-							<span class="text-[8px] font-semibold leading-tight {isGroupA ? 'text-orange-500' : 'text-teal-600'}">{pitchSlot.position}</span>
+							<span class="text-[8px] font-semibold leading-tight {isGK ? 'text-gray-500' : isGroupA ? 'text-orange-500' : 'text-teal-600'}">{pitchSlot.position}</span>
 						</svelte:fragment>
 					</Pitch>
 				</div>
@@ -376,16 +385,19 @@
 						class="flex min-h-[3.5rem] flex-wrap gap-1.5 rounded-2xl border-2 border-dashed border-gray-200 bg-white p-2"
 					>
 						{#each bench as chip (chip.id)}
+							{@const isGK = chip.group === null}
 							{@const isGroupA = chip.group === 'A'}
 							<div
 								animate:flip={{ duration: FLIP_MS }}
-								class="relative flex h-14 w-[3.25rem] flex-shrink-0 flex-col items-center justify-center rounded-xl shadow-sm {isGroupA ? 'bg-orange-500' : 'bg-teal-600'}"
+								class="relative flex h-14 w-[3.25rem] flex-shrink-0 flex-col items-center justify-center rounded-xl shadow-sm {isGK ? 'bg-gray-500' : isGroupA ? 'bg-orange-500' : 'bg-teal-600'}"
 							>
-								<button
-									on:click|stopPropagation={() => toggleBenchGroup(chip.id)}
-									class="absolute right-0.5 top-0.5 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-white/50 text-[8px] font-bold text-white shadow {isGroupA ? 'bg-orange-300' : 'bg-teal-400'}"
-									aria-label="Toggle group"
-								>{isGroupA ? 'A' : 'B'}</button>
+								{#if !isGK}
+									<button
+										on:click|stopPropagation={() => toggleBenchGroup(chip.id)}
+										class="absolute right-0.5 top-0.5 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-white/50 text-[8px] font-bold text-white shadow {isGroupA ? 'bg-orange-300' : 'bg-teal-400'}"
+										aria-label="Toggle group"
+									>{isGroupA ? 'A' : 'B'}</button>
+								{/if}
 								<span class="text-sm font-bold leading-none text-white">{chip.number}</span>
 								<span class="max-w-full truncate px-1 text-[9px] font-medium leading-tight text-white/90">{chip.name.split(' ')[0]}</span>
 							</div>

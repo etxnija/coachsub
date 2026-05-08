@@ -43,6 +43,8 @@
 	let benchA = [];
 	/** @type {GameChip[]} */
 	let benchB = [];
+	/** @type {GameChip[]} */
+	let benchGK = [];
 	/** @type {{ type: string, positions: string[] }[]} */
 	let formationRows = [];
 	/** @type {Set<string>} */
@@ -54,7 +56,7 @@
 	// DnD state
 	/** @type {Record<string, GameChip[]>} */
 	let preDropOccupants = {};
-	/** @type {'A' | 'B' | null} */
+	/** @type {'A' | 'B' | 'GK' | null} */
 	let benchDragGroup = null;
 	/** @type {GameChip | null} */
 	let pendingDisplaced = null;
@@ -149,8 +151,8 @@
 			.filter((p) => p.id !== undefined && included.has(p.id) && !startingIds.has(p.id))
 			.map((p) => {
 				const mp = matchPlayers.find((m) => m.playerId === p.id);
-				/** @type {'A' | 'B'} */
-				const group = mp?.rotationGroup === 'B' ? 'B' : 'A';
+				/** @type {'A' | 'B' | null} */
+				const group = mp ? mp.rotationGroup : 'A';
 				return {
 					id: /** @type {number} */ (p.id),
 					name: p.name,
@@ -165,6 +167,7 @@
 
 		benchA = allBench.filter((c) => c.group === 'A');
 		benchB = allBench.filter((c) => c.group === 'B');
+		benchGK = allBench.filter((c) => c.group === null);
 	}
 
 	function startClock() {
@@ -206,9 +209,11 @@
 		}
 		for (const chip of benchA) chip.stintMs += elapsed;
 		for (const chip of benchB) chip.stintMs += elapsed;
+		for (const chip of benchGK) chip.stintMs += elapsed;
 		slots = slots;
 		benchA = benchA;
 		benchB = benchB;
+		benchGK = benchGK;
 	}
 
 	function toggleClock() {
@@ -245,7 +250,7 @@
 				msPerPosition[chip.id] = { ...chip.msPerPosition };
 			}
 		}
-		for (const chip of [...benchA, ...benchB]) {
+		for (const chip of [...benchA, ...benchB, ...benchGK]) {
 			totalMsPlayed[chip.id] = chip.totalMs;
 			msPerPosition[chip.id] = { ...chip.msPerPosition };
 		}
@@ -293,7 +298,8 @@
 				);
 				if (!onBench && !inSlot) {
 					if (d.group === 'A') benchA = [...benchA, d];
-					else benchB = [...benchB, d];
+					else if (d.group === 'B') benchB = [...benchB, d];
+					else benchGK = [...benchGK, d];
 				}
 			}
 			if (incoming && match?.id) {
@@ -319,17 +325,18 @@
 	}
 
 	/**
-	 * @param {'A' | 'B'} group
+	 * @param {'A' | 'B' | 'GK'} group
 	 * @param {CustomEvent} e
 	 */
 	function handleBenchConsider(group, e) {
 		benchDragGroup = group;
 		if (group === 'A') benchA = e.detail.items;
-		else benchB = e.detail.items;
+		else if (group === 'B') benchB = e.detail.items;
+		else benchGK = e.detail.items;
 	}
 
 	/**
-	 * @param {'A' | 'B'} group
+	 * @param {'A' | 'B' | 'GK'} group
 	 * @param {CustomEvent} e
 	 */
 	function handleBenchFinalize(group, e) {
@@ -339,24 +346,25 @@
 			e.detail.items.map((c) => ({ ...c, position: null }))
 		);
 
-		// Set this group's bench to DnD's final state
 		if (group === 'A') benchA = finalItems;
-		else benchB = finalItems;
+		else if (group === 'B') benchB = finalItems;
+		else benchGK = finalItems;
 
 		// Add any displaced player stashed by slot finalize
 		if (pendingDisplaced) {
 			const d = pendingDisplaced;
 			pendingDisplaced = null;
 			if (d.group === 'A') benchA = [...benchA, d];
-			else benchB = [...benchB, d];
+			else if (d.group === 'B') benchB = [...benchB, d];
+			else benchGK = [...benchGK, d];
 		}
 
-		// Sort each group by bench time descending (longest bench = first/NEXT)
+		// Sort A and B by bench time descending (longest bench = NEXT)
 		benchA = [...benchA].sort((a, b) => b.stintMs - a.stintMs);
 		benchB = [...benchB].sort((a, b) => b.stintMs - a.stintMs);
 
 		// Remove from slots any player now on bench
-		const allBenchIds = new Set([...benchA, ...benchB].map((c) => c.id));
+		const allBenchIds = new Set([...benchA, ...benchB, ...benchGK].map((c) => c.id));
 		for (const slot of slots) {
 			slot.items = slot.items.filter((c) => !allBenchIds.has(c.id));
 		}
@@ -501,10 +509,10 @@
 				onConsider={handleSlotConsider}
 				onFinalize={handleSlotFinalize}
 			>
-				<svelte:fragment slot="chip" let:chip let:isGroupA let:pitchSlot>
+				<svelte:fragment slot="chip" let:chip let:isGroupA let:isGK let:pitchSlot>
 					<span class="text-sm font-bold leading-none text-blue-700">{chip.number}</span>
 					<span class="max-w-full truncate text-[9px] font-medium leading-tight text-gray-700">{chip.name.split(' ')[0]}</span>
-					<span class="text-[8px] font-semibold leading-tight {isGroupA ? 'text-orange-500' : 'text-teal-600'}">{pitchSlot.position}</span>
+					<span class="text-[8px] font-semibold leading-tight {isGK ? 'text-gray-500' : isGroupA ? 'text-orange-500' : 'text-teal-600'}">{pitchSlot.position}</span>
 					<span class="text-[7px] leading-tight text-gray-400">{fmt(chip.totalMs)}</span>
 					<span class="text-[7px] font-semibold leading-tight text-green-600">{fmt(chip.stintMs)}</span>
 				</svelte:fragment>
@@ -588,6 +596,30 @@
 					{/if}
 				</div>
 			</div>
+
+			<!-- GK (no rotation group) -->
+			{#if benchGK.length > 0}
+				<div class="mt-1">
+					<p class="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">● GK</p>
+					<div
+						use:dndzone={{ items: benchGK, flipDurationMs: FLIP_MS, dropTargetStyle: {} }}
+						on:consider={(e) => handleBenchConsider('GK', e)}
+						on:finalize={(e) => handleBenchFinalize('GK', e)}
+						class="flex min-h-[3rem] flex-wrap gap-1.5"
+					>
+						{#each benchGK as chip (chip.id)}
+							<div
+								animate:flip={{ duration: FLIP_MS }}
+								class="flex h-16 w-[3.25rem] flex-shrink-0 flex-col items-center justify-center rounded-xl bg-gray-500 px-1 shadow-sm"
+							>
+								<span class="text-base font-bold leading-none text-white">{chip.number}</span>
+								<span class="max-w-full truncate text-[9px] font-medium leading-tight text-gray-200">{chip.name.split(' ')[0]}</span>
+								<span class="text-[7px] leading-tight text-gray-300">{fmt(chip.totalMs)}</span>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>
