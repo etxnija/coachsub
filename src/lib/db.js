@@ -185,6 +185,14 @@ export async function saveSubEvent(event) {
 	return db.subEvents.add(event);
 }
 
+/**
+ * @param {number} matchId
+ * @returns {Promise<MatchStatSnapshot[]>}
+ */
+export async function getMatchStats(matchId) {
+	return db.matchStats.where('matchId').equals(matchId).toArray();
+}
+
 export const POSITIONS = [
 	{ value: 'G', label: 'GK' },
 	{ value: 'D', label: 'DEF' },

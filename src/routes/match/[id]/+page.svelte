@@ -258,6 +258,18 @@
 					<p class="text-xs leading-tight text-gray-500">vs {match.opponent}</p>
 				{/if}
 			</div>
+			{#if match}
+				<button
+					on:click={() => goto(`/match/${match?.id}/stats`)}
+					class="flex-shrink-0 rounded-xl bg-gray-100 p-2 text-gray-600 active:bg-gray-200"
+					aria-label="View stats"
+					title="Match stats"
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+						<path d="M15.5 2A1.5 1.5 0 0014 3.5v13a1.5 1.5 0 003 0v-13A1.5 1.5 0 0015.5 2zM9.5 6A1.5 1.5 0 008 7.5v9a1.5 1.5 0 003 0v-9A1.5 1.5 0 009.5 6zM3.5 10A1.5 1.5 0 002 11.5v5a1.5 1.5 0 003 0v-5A1.5 1.5 0 003.5 10z" />
+					</svg>
+				</button>
+			{/if}
 		</div>
 		{#if match}
 			<div class="flex rounded-xl bg-gray-100 mx-4 mt-1.5 mb-2 p-1">

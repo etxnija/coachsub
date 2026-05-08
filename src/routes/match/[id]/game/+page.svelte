@@ -599,7 +599,14 @@
 			<p class="text-5xl">⚽</p>
 			<p class="mt-3 text-2xl font-bold text-gray-900">Match Complete!</p>
 			<p class="mt-1 text-gray-500">{match?.name}</p>
-			<button on:click={() => goto('/matches')} class="btn-primary mt-6"> Back to Matches </button>
+			<button
+				on:click={() => goto(`/match/${match?.id}/stats`)}
+				class="btn-primary mt-6"
+			>View Stats</button>
+			<button
+				on:click={() => goto('/matches')}
+				class="mt-3 block w-full text-center text-sm text-gray-500 underline"
+			>Back to Matches</button>
 		</div>
 	</div>
 {/if}
