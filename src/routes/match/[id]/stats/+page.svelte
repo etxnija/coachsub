@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { getMatch, getPlayers, getMatchPlayers, getMatchStats } from '$lib/db.js';
+	import { getMatch, getPlayers, getMatchStats } from '$lib/db.js';
 
 	/** @type {import('$lib/db.js').Match | null} */
 	let match = null;
@@ -42,43 +42,52 @@
 		return 'bg-orange-100 text-orange-700';
 	}
 
+	/** @type {string | null} */
+	let error = null;
+
 	onMount(async () => {
-		const id = parseInt($page.params.id ?? '', 10);
-		const [fetchedMatch, players, matchPlayers, allStats] = await Promise.all([
-			getMatch(id),
-			getPlayers(),
-			getMatchPlayers(id),
-			getMatchStats(id)
-		]);
-		match = fetchedMatch ?? null;
+		try {
+			const id = parseInt($page.params.id ?? '', 10);
+			const [fetchedMatch, players, allStats] = await Promise.all([
+				getMatch(id),
+				getPlayers(),
+				getMatchStats(id)
+			]);
+			match = fetchedMatch ?? null;
 
-		if (!match) { loading = false; return; }
+			if (!match) { loading = false; return; }
 
-		if (allStats.length === 0) { loading = false; return; }
+			if (allStats.length === 0) { loading = false; return; }
 
-		hasStats = true;
+			hasStats = true;
 
-		// Last period snapshot has cumulative totals for the full match
-		const snapshot = allStats.sort((a, b) => b.period - a.period)[0];
+			// Last period snapshot has cumulative totals for the full match
+			const snapshot = allStats.sort((a, b) => b.period - a.period)[0];
+			const { totalMsPlayed, msPerPosition } = snapshot;
 
-		playerStats = matchPlayers
-			.map((mp) => {
-				const player = players.find((p) => p.id === mp.playerId);
-				if (!player) return null;
-				return {
-					id: mp.playerId,
-					name: player.name,
-					number: player.number,
-					totalMs: snapshot.totalMsPlayed[mp.playerId] ?? 0,
-					msPerPosition: snapshot.msPerPosition[mp.playerId] ?? {}
-				};
-			})
-			.filter(/** @param {any} x */ (x) => x !== null)
-			.sort((a, b) => b.totalMs - a.totalMs);
+			// Derive players from snapshot keys — robust even if matchPlayers is empty
+			playerStats = Object.keys(totalMsPlayed)
+				.map((key) => {
+					const pid = Number(key);
+					const player = players.find((p) => p.id === pid);
+					if (!player) return null;
+					return {
+						id: pid,
+						name: player.name,
+						number: player.number,
+						totalMs: totalMsPlayed[key] ?? 0,
+						msPerPosition: msPerPosition[key] ?? {}
+					};
+				})
+				.filter(/** @param {any} x */ (x) => x !== null)
+				.sort((a, b) => b.totalMs - a.totalMs);
 
-		matchDurationMs = match.duration * match.periods * 60 * 1000;
-
-		loading = false;
+			matchDurationMs = (match.duration ?? 20) * (match.periods ?? 2) * 60 * 1000;
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			loading = false;
+		}
 	});
 </script>
 
@@ -115,6 +124,11 @@
 		{#if loading}
 			<div class="flex items-center justify-center py-20">
 				<div class="h-8 w-8 animate-spin rounded-full border-2 border-blue-700 border-t-transparent"></div>
+			</div>
+		{:else if error}
+			<div class="rounded-2xl bg-red-50 px-4 py-6 text-center">
+				<p class="font-semibold text-red-700">Failed to load stats</p>
+				<p class="mt-1 text-sm text-red-500">{error}</p>
 			</div>
 		{:else if !match}
 			<div class="py-20 text-center text-gray-500">Match not found</div>
