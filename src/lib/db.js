@@ -51,10 +51,11 @@ db.version(3).stores({
  * @property {number} periods
  * @property {string} formation
  * @property {number} teamId
+ * @property {string[]} [groupASlots]  - slot IDs (from slotId()) that belong to rotation Group A
  */
 
 /**
- * @typedef {'F'|'LM'|'CM'|'RM'|'LB'|'RB'|'GK'|null} MatchPosition
+ * @typedef {string | null} MatchPosition
  */
 
 /**
@@ -64,6 +65,7 @@ db.version(3).stores({
  * @property {number} playerId
  * @property {boolean} starting
  * @property {MatchPosition} matchPosition
+ * @property {'A' | 'B' | null} [rotationGroup]
  */
 
 const TEAM_ID = 1;
@@ -116,6 +118,11 @@ export async function getMatches() {
 /** @param {number} id @returns {Promise<Match | undefined>} */
 export async function getMatch(id) {
 	return db.matches.get(id);
+}
+
+/** @param {number} id @param {Partial<Match>} changes @returns {Promise<number>} */
+export async function updateMatch(id, changes) {
+	return db.matches.update(id, changes);
 }
 
 /** @param {Omit<Match, 'id'>} match @returns {Promise<number>} */
