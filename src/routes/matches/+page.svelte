@@ -20,6 +20,13 @@
 			year: 'numeric'
 		});
 	}
+
+	/** @param {import('$lib/db.js').Match} match */
+	function matchHref(match) {
+		if (match.status === 'complete') return `/match/${match.id}/stats`;
+		if (match.status === 'live') return `/match/${match.id}/game`;
+		return `/match/${match.id}`;
+	}
 </script>
 
 <svelte:head>
@@ -108,31 +115,27 @@
 				{#each matches as match (match.id)}
 					<li>
 						<button
-							on:click={() => goto(`/match/${match.id}`)}
-							class="flex w-full items-center gap-4 rounded-2xl bg-white px-4 py-3 shadow-sm active:bg-gray-50"
+							on:click={() => goto(matchHref(match))}
+							class="flex w-full items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm active:bg-gray-50"
 						>
 							<div class="min-w-0 flex-1 text-left">
 								<p class="truncate text-base font-semibold text-gray-900">{match.name}</p>
 								<p class="text-sm text-gray-500">
-									{#if match.opponent}vs {match.opponent} ·
-									{/if}{formatDate(match.date)}
+									{#if match.opponent}vs {match.opponent} · {/if}{formatDate(match.date)}
 								</p>
 							</div>
-							<span
-								class="flex-shrink-0 rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
-								>{match.format}</span
-							>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 20 20"
-								fill="currentColor"
-								class="h-4 w-4 flex-shrink-0 text-gray-400"
-							>
-								<path
-									fill-rule="evenodd"
-									d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
-									clip-rule="evenodd"
-								/>
+							<!-- Status badge -->
+							{#if match.status === 'live'}
+								<span class="flex flex-shrink-0 items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+									<span class="h-1.5 w-1.5 animate-pulse rounded-full bg-green-500"></span>Live
+								</span>
+							{:else if match.status === 'complete'}
+								<span class="flex-shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600">Done</span>
+							{:else}
+								<span class="flex-shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">Setup</span>
+							{/if}
+							<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 flex-shrink-0 text-gray-400">
+								<path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
 							</svg>
 						</button>
 					</li>

@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { getMatch, getPlayers, getMatchPlayers, saveMatchStats, saveSubEvent } from '$lib/db.js';
+	import { getMatch, getPlayers, getMatchPlayers, saveMatchStats, saveSubEvent, updateMatch } from '$lib/db.js';
 	import { parseFormation, slotId } from '$lib/formation.js';
 	import { dndzone } from 'svelte-dnd-action';
 	import { flip } from 'svelte/animate';
@@ -90,6 +90,12 @@
 
 		if (!match) {
 			loading = false;
+			return;
+		}
+
+		// Guard: redirect if match is already complete
+		if (match.status === 'complete') {
+			goto(`/match/${match.id}/stats`);
 			return;
 		}
 
@@ -226,6 +232,7 @@
 		await persistStats();
 		if (currentPeriod >= totalPeriods) {
 			matchComplete = true;
+			if (match?.id) await updateMatch(match.id, { status: 'complete' });
 		} else {
 			betweenPeriods = true;
 		}

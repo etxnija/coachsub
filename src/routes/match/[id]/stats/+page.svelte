@@ -100,7 +100,7 @@
 	<header class="sticky top-0 z-10 border-b border-gray-200 bg-white px-4 py-3 shadow-sm">
 		<div class="flex items-center gap-3">
 			<button
-				on:click={() => goto(`/match/${$page.params.id}`)}
+				on:click={() => goto('/matches')}
 				class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-gray-600 active:bg-gray-100"
 				aria-label="Back"
 			>

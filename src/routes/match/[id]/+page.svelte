@@ -408,12 +408,28 @@
 					</div>
 				</div>
 
-				<!-- Start Match -->
+				<!-- Start / Resume / Stats button -->
 				<div class="flex-shrink-0 px-3 pb-3 pt-2">
-					<button
-						on:click={() => match?.id !== undefined && goto(`/match/${match.id}/game`)}
-						class="btn-primary"
-					>Start Match</button>
+					{#if match?.status === 'complete'}
+						<button
+							on:click={() => goto(`/match/${match?.id}/stats`)}
+							class="btn-primary"
+						>View Stats</button>
+					{:else if match?.status === 'live'}
+						<button
+							on:click={() => goto(`/match/${match?.id}/game`)}
+							class="btn-primary"
+						>Resume Match</button>
+					{:else}
+						<button
+							on:click={async () => {
+								if (match?.id === undefined) return;
+								await updateMatch(match.id, { status: 'live' });
+								goto(`/match/${match.id}/game`);
+							}}
+							class="btn-primary"
+						>Start Match</button>
+					{/if}
 				</div>
 			</div>
 		{/if}

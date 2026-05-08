@@ -45,7 +45,8 @@
 				duration: dur,
 				periods: per,
 				formation: formation.trim(),
-				teamId: team.id
+				teamId: team.id,
+				status: 'setup'
 			});
 			goto(`/match/${id}`);
 		} catch {
