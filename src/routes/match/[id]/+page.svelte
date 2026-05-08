@@ -376,16 +376,16 @@
 					<Pitch
 						{slots}
 						{formationRows}
-						groupASet={groupASlots}
+						groupASet={useGroups ? groupASlots : new Set()}
 						flipMs={FLIP_MS}
 						onConsider={handleSlotConsider}
 						onFinalize={handleSlotFinalize}
-						onGroupToggle={toggleSlotGroup}
+						onGroupToggle={useGroups ? toggleSlotGroup : null}
 					>
 						<svelte:fragment slot="chip" let:chip let:isGroupA let:isGK let:pitchSlot>
 							<span class="text-sm font-bold leading-none text-blue-700">{chip.number}</span>
 							<span class="max-w-full truncate text-[9px] font-medium leading-tight text-gray-700">{chip.name.split(' ')[0]}</span>
-							<span class="text-[8px] font-semibold leading-tight {isGK ? 'text-gray-500' : isGroupA ? 'text-orange-500' : 'text-teal-600'}">{pitchSlot.position}</span>
+							<span class="text-[8px] font-semibold leading-tight {isGK || !useGroups ? 'text-gray-500' : isGroupA ? 'text-orange-500' : 'text-teal-600'}">{pitchSlot.position}</span>
 						</svelte:fragment>
 					</Pitch>
 				</div>
