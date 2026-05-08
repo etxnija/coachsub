@@ -23,6 +23,16 @@ db.version(3).stores({
 	subEvents: '++id, matchId'
 });
 
+// Version 4: adds pbId index for PocketBase sync
+db.version(4).stores({
+	team: 'id, name, pbId',
+	players: '++id, name, number, position, teamId, pbId',
+	matches: '++id, name, date, teamId, pbId',
+	matchPlayers: '++id, matchId, playerId',
+	matchStats: '++id, matchId',
+	subEvents: '++id, matchId'
+});
+
 /** @typedef {'F' | 'M' | 'D' | 'G' | null} Position */
 
 /**
@@ -32,12 +42,14 @@ db.version(3).stores({
  * @property {number} number
  * @property {Position} position
  * @property {number} teamId
+ * @property {string} [pbId]
  */
 
 /**
  * @typedef {Object} Team
  * @property {number} id
  * @property {string} name
+ * @property {string} [pbId]
  */
 
 /**
@@ -54,6 +66,7 @@ db.version(3).stores({
  * @property {string[]} [groupASlots]  - slot IDs (from slotId()) that belong to rotation Group A
  * @property {'setup' | 'live' | 'complete'} [status]
  * @property {boolean} [useGroups]  - whether rotation groups A/B are enabled (default true)
+ * @property {string} [pbId]
  */
 
 /**
@@ -71,6 +84,12 @@ db.version(3).stores({
  */
 
 const TEAM_ID = 1;
+
+// Write hook — registered by the sync layer to push changes to PocketBase
+/** @type {((type: string, data: any) => void) | null} */
+let _onWrite = null;
+/** @param {(type: string, data: any) => void} fn */
+export function registerWriteHook(fn) { _onWrite = fn; }
 
 /** @returns {Promise<Team>} */
 export async function getOrCreateTeam() {
@@ -94,17 +113,23 @@ export async function getPlayer(id) {
 
 /** @param {Omit<Player, 'id'>} player @returns {Promise<number>} */
 export async function addPlayer(player) {
-	return db.players.add(player);
+	const id = await db.players.add(player);
+	_onWrite?.('player', id);
+	return id;
 }
 
 /** @param {number} id @param {Partial<Player>} changes @returns {Promise<number>} */
 export async function updatePlayer(id, changes) {
-	return db.players.update(id, changes);
+	const result = await db.players.update(id, changes);
+	_onWrite?.('player', id);
+	return result;
 }
 
 /** @param {number} id @returns {Promise<void>} */
 export async function deletePlayer(id) {
-	return db.players.delete(id);
+	const player = await db.players.get(id);
+	await db.players.delete(id);
+	_onWrite?.('deletePlayer', player?.pbId ?? null);
 }
 
 /** @param {string} name @returns {Promise<void>} */
@@ -124,12 +149,16 @@ export async function getMatch(id) {
 
 /** @param {number} id @param {Partial<Match>} changes @returns {Promise<number>} */
 export async function updateMatch(id, changes) {
-	return db.matches.update(id, changes);
+	const result = await db.matches.update(id, changes);
+	_onWrite?.('match', id);
+	return result;
 }
 
 /** @param {Omit<Match, 'id'>} match @returns {Promise<number>} */
 export async function createMatch(match) {
-	return db.matches.add(match);
+	const id = await db.matches.add(match);
+	_onWrite?.('match', id);
+	return id;
 }
 
 /** @param {number} matchId @returns {Promise<MatchPlayer[]>} */
@@ -147,6 +176,7 @@ export async function saveMatchPlayers(matchId, players) {
 	if (players.length > 0) {
 		await db.matchPlayers.bulkAdd(players);
 	}
+	_onWrite?.('matchPlayers', matchId);
 }
 
 /**
@@ -176,7 +206,9 @@ export async function saveMatchPlayers(matchId, players) {
  * @returns {Promise<number>}
  */
 export async function saveMatchStats(matchId, period, data) {
-	return db.matchStats.add({ matchId, period, ...data });
+	const id = await db.matchStats.add({ matchId, period, ...data });
+	_onWrite?.('matchStats', { matchId, period });
+	return id;
 }
 
 /**

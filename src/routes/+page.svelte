@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { getOrCreateTeam, getPlayers, POSITIONS } from '$lib/db.js';
 	import { goto } from '$app/navigation';
+	import { syncState } from '$lib/pb.js';
 
 	/** @type {import('$lib/db.js').Team | null} */
 	let team = null;
@@ -50,6 +51,24 @@
 				{/if}
 			</div>
 			<div class="flex items-center gap-2">
+				<!-- Sync / settings indicator -->
+				<button
+					on:click={() => goto('/settings')}
+					class="relative flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm active:bg-gray-50"
+					aria-label="Sync settings"
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+						<path fill-rule="evenodd" d="M7.84 1.804A1 1 0 018.82 1h2.36a1 1 0 01.98.804l.331 1.652a6.993 6.993 0 011.929 1.115l1.598-.54a1 1 0 011.186.447l1.18 2.044a1 1 0 01-.205 1.251l-1.267 1.113a7.047 7.047 0 010 2.228l1.267 1.113a1 1 0 01.206 1.25l-1.18 2.045a1 1 0 01-1.187.447l-1.598-.54a6.993 6.993 0 01-1.929 1.115l-.33 1.652a1 1 0 01-.98.804H8.82a1 1 0 01-.98-.804l-.331-1.652a6.993 6.993 0 01-1.929-1.115l-1.598.54a1 1 0 01-1.186-.447l-1.18-2.044a1 1 0 01.205-1.251l1.267-1.114a7.05 7.05 0 010-2.227L1.821 7.773a1 1 0 01-.206-1.25l1.18-2.045a1 1 0 011.187-.447l1.598.54A6.993 6.993 0 017.51 3.456l.33-1.652zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+					</svg>
+					<!-- Sync status dot -->
+					{#if $syncState.syncing}
+						<span class="absolute right-1 top-1 h-2.5 w-2.5 animate-pulse rounded-full bg-blue-500"></span>
+					{:else if $syncState.connected}
+						<span class="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-green-500"></span>
+					{:else if $syncState.error}
+						<span class="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-red-500"></span>
+					{/if}
+				</button>
 				<button
 					on:click={() => goto('/matches')}
 					class="flex h-10 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm active:bg-gray-50"
